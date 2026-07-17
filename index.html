@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Barance</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        background: #0e1013;
+        color: #cfd5dd;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      header {
+        width: 100%;
+        max-width: 1280px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 16px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: 0.3px;
+      }
+      h1 .tag {
+        font-size: 11px;
+        color: #6d7683;
+        font-weight: 500;
+        margin-left: 6px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      select,
+      button {
+        background: #1b1f26;
+        color: #cfd5dd;
+        border: 1px solid #2c323c;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:hover,
+      select:hover {
+        border-color: #3d4550;
+      }
+      .stats {
+        display: flex;
+        gap: 16px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        min-width: 56px;
+      }
+      .stat .label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #6d7683;
+      }
+      .stat .value {
+        font-size: 15px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .value.ok {
+        color: #59c169;
+      }
+      .value.warn {
+        color: #e0a93c;
+      }
+      .value.danger {
+        color: #e05252;
+      }
+      #stage {
+        position: relative;
+        width: 100%;
+        max-width: 1280px;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+      }
+      #overlay {
+        position: absolute;
+        top: 16%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(20, 23, 29, 0.92);
+        border: 1px solid #5b2f35;
+        border-radius: 10px;
+        padding: 20px 28px;
+        text-align: center;
+        backdrop-filter: blur(4px);
+      }
+      #overlay.hidden {
+        display: none;
+      }
+      #overlay h2 {
+        color: #ff6b6b;
+        font-size: 20px;
+        margin-bottom: 6px;
+      }
+      #overlay p {
+        font-size: 13px;
+        color: #9aa2ae;
+        margin-bottom: 14px;
+      }
+      #overlay button {
+        margin: 0 5px;
+      }
+      footer {
+        padding: 10px 16px 18px;
+        font-size: 12px;
+        color: #5f6874;
+        text-align: center;
+        max-width: 920px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Barance<span class="tag">physics sandbox</span></h1>
+      <select id="bar-select" title="Bar type"></select>
+      <button id="btn-reset" title="Empty the bar, refill the tray">Reset</button>
+      <div class="stats">
+        <div class="stat"><span class="label">Total</span><span class="value" id="stat-total">–</span></div>
+        <div class="stat"><span class="label">Left</span><span class="value" id="stat-left">–</span></div>
+        <div class="stat"><span class="label">Right</span><span class="value" id="stat-right">–</span></div>
+        <div class="stat"><span class="label">Balance</span><span class="value" id="stat-balance">–</span></div>
+        <div class="stat"><span class="label">Carrying</span><span class="value" id="stat-carry">–</span></div>
+        <div class="stat"><span class="label">Moves</span><span class="value" id="stat-moves">0</span></div>
+      </div>
+    </header>
+    <div id="stage">
+      <canvas id="game" width="1280" height="720"></canvas>
+      <div id="overlay" class="hidden">
+        <h2>Bar dropped!</h2>
+        <p>The load tipped the bar off the J-hooks.</p>
+        <button id="btn-retry">Undo last move &amp; retry</button>
+        <button id="btn-restart">Start over</button>
+      </div>
+    </div>
+    <footer>
+      Click plates to pick them up — keep clicking to stack more in hand (up to 20&nbsp;kg; a lone
+      25 always fits). Click a sleeve to slide the stack on, click the floor to set it down,
+      right-click or Esc to put everything back. Only the outermost plate comes off. Plates in
+      hand are weightless — but if the bar tips past 15&deg; it&rsquo;s gone, and the plates will
+      ride the sleeve on the way down.
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
