@@ -29,7 +29,7 @@ export interface HoverState {
 
 export interface GameHooks {
   readonly model: GameModel;
-  readonly failed: boolean;
+  readonly locked: boolean;
   readonly hand: Hand | null;
   barPose(): Pose;
   grabFromTray(kg: number): void;
@@ -140,6 +140,11 @@ export class Input {
   }
 
   private updateAtPoint(w: { x: number; y: number }): void {
+    if (this.game.locked) {
+      this.hover = { trayKg: null, barSide: null, canGrab: false };
+      this.canvas.style.cursor = 'default';
+      return;
+    }
     const hand = this.game.hand;
     if (hand) {
       hand.world = w;
@@ -157,8 +162,7 @@ export class Input {
     this.hover = { trayKg, barSide, canGrab };
 
     let cursor = 'default';
-    if (this.game.failed) cursor = 'default';
-    else if (canGrab) cursor = hand ? 'copy' : 'grab';
+    if (canGrab) cursor = hand ? 'copy' : 'grab';
     else if (hand?.ghost?.valid) cursor = 'pointer';
     this.canvas.style.cursor = cursor;
   }
@@ -168,7 +172,7 @@ export class Input {
   }
 
   private onDown(e: PointerEvent): void {
-    if (this.game.failed) return;
+    if (this.game.locked) return;
     const w = this.view.eventToWorld(e);
     this.updateAtPoint(w);
 

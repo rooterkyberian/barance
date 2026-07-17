@@ -4,10 +4,35 @@ A 2D physics puzzle: load and unload a barbell resting on squat-rack J-hooks to 
 configurations in the fewest moves. The bar is a real rigid body — load it asymmetrically and it
 tips off the hooks. Tipping is emergent (torque about the hook-seat edge), never scripted.
 
-**Status: M1 — physics sandbox.** Bar on hooks, plate drag/placement, CoM recompute, emergent
-tipping, balance meter, move counter, three bar types.
+**Status: M2 — generated challenges.** Bar on hooks, plate placement, CoM recompute, emergent
+tipping, balance meter, three bar types, and seeded procedurally generated challenges with
+par + stars. A free-play sandbox remains one click away.
 
-## Play (current sandbox)
+## Challenges
+
+Each challenge gives you a bar with plates already on it, a limited tray, and a **goal total
+weight** (bar included). Reach the goal with the bar still standing (and your hands empty) to
+win. Stars: ≤ par = ★★★, ≤ par + 2 = ★★, otherwise ★.
+
+- Generation is **seeded** — the URL hash (`#c=seed.bar`) fully defines a challenge, so links
+  are shareable and replayable.
+- Every generated challenge is **solvable by construction**: the generator scrambles a stable
+  target loadout (some plates missing, junk plates piled on) and then verifies a safe carry
+  order exists — one where no intermediate state tips the bar, since lifting a plate off one
+  side rebalances the bar instantly. The length of that plan is the par.
+- Junk removal order matters: only outermost plates come off, and stripping the wrong side
+  first can put the centre of mass past a hook. The tray may also contain decoy plates.
+
+## Play
+
+- **Click a plate** (tray or the outermost plate on a sleeve) to pick it up. Plates in hand are
+  weightless — the bar rebalances the moment you lift one.
+- **Keep clicking** to stack more plates in hand, up to the carry capacity (20 kg; a single plate
+  always fits, so a lone 25 is carryable). One carry = **1 move**, however many plates it holds.
+- **Click a sleeve** to slide the whole stack on (ghost preview shows where it lands; plates load
+  from the tip, so new plates go outboard of existing ones).
+- **Click the floor** to set the stack down; **right-click / Esc** puts everything back (free).
+- Picking the outermost plate off and putting it back where it was counts 0 moves.
 
 - **Click a plate** (tray or the outermost plate on a sleeve) to pick it up. Plates in hand are
   weightless — the bar rebalances the moment you lift one.
@@ -59,7 +84,8 @@ works under the project-page subpath.
 | File | Role |
 |---|---|
 | `src/config.ts` | All tuning data: bars, plates, rack, physics, capacity, fail rules |
-| `src/model.ts` | Pure game state (loadout/tray/moves) — source of truth, future par-solver input |
+| `src/challenge.ts` | Seeded challenge generator + safe-carry planner (par, solvability) |
+| `src/model.ts` | Pure game state (loadout/tray/moves) — source of truth |
 | `src/sim.ts` | Rapier world mirroring the model; emergent tipping |
 | `src/input.ts` | Click-based grab/stack/place interaction, ghost snapping |
 | `src/render.ts` | Canvas renderer (world-space, interpolated) |
@@ -67,6 +93,6 @@ works under the project-page subpath.
 
 ## Roadmap
 
-- **M2 — game loop:** level targets, win detection, level select, 5 levels (JSON format), par/stars
-- **M3 — content:** collars, sliding (uncollared) plates, 20+ levels, par calculator
-- **M4 — polish:** replays, slow-mo on tip, sounds, camera shake
+- **M3 — content:** collars, authored/curated level sets, difficulty progression, constraint
+  challenges (one-side access, limited floor space)
+- **M4 — polish:** replays, slow-mo on tip, sounds, camera shake, best-score persistence

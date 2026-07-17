@@ -7,6 +7,7 @@ import {
   Side,
   plateSpec,
 } from './config';
+import { Challenge, generateChallenge } from './challenge';
 import { GameModel, ModelSnapshot } from './model';
 import { LoosePose, Pose, Sim } from './sim';
 import { FrameInfo, Renderer, fmtKg } from './render';
@@ -19,15 +20,18 @@ function must<T extends HTMLElement>(id: string): T {
 }
 
 export class Game implements GameHooks {
-  model: GameModel;
+  model!: GameModel;
+  challenge: Challenge | null = null;
   hand: Hand | null = null;
   failed = false;
+  won = false;
 
   private sim = new Sim();
   private renderer: Renderer;
   private input: Input;
   private preMove: ModelSnapshot | null = null;
   private tiltSteps = 0;
+  private winSteps = 0;
   private overCapUntil = 0;
 
   private prevPose: Pose = { x: 0, y: 0, angle: 0 };
@@ -35,33 +39,111 @@ export class Game implements GameHooks {
   private acc = 0;
   private lastT: number | null = null;
 
+  private barSelect = must<HTMLSelectElement>('bar-select');
   private overlay = must<HTMLDivElement>('overlay');
   private btnRetry = must<HTMLButtonElement>('btn-retry');
+  private winOverlay = must<HTMLDivElement>('win-overlay');
+  private winStars = must<HTMLDivElement>('win-stars');
+  private winText = must<HTMLParagraphElement>('win-text');
+  private chalLabel = must<HTMLSpanElement>('chal-label');
   private stTotal = must<HTMLSpanElement>('stat-total');
+  private stGoal = must<HTMLSpanElement>('stat-goal');
   private stLeft = must<HTMLSpanElement>('stat-left');
   private stRight = must<HTMLSpanElement>('stat-right');
   private stBalance = must<HTMLSpanElement>('stat-balance');
   private stCarry = must<HTMLSpanElement>('stat-carry');
   private stMoves = must<HTMLSpanElement>('stat-moves');
+  private stPar = must<HTMLSpanElement>('stat-par');
 
   constructor() {
     const canvas = must<HTMLCanvasElement>('game');
     this.renderer = new Renderer(canvas);
     this.input = new Input(canvas, this.renderer, this);
 
-    const select = must<HTMLSelectElement>('bar-select');
     for (const b of BARS) {
       const opt = document.createElement('option');
       opt.value = b.id;
       opt.textContent = b.name;
-      select.appendChild(opt);
+      this.barSelect.appendChild(opt);
     }
-    select.addEventListener('change', () => this.switchBar(select.value));
+    this.barSelect.addEventListener('change', () => this.switchBar(this.barSelect.value));
+    must<HTMLButtonElement>('btn-new').addEventListener('click', () => this.newChallenge());
+    must<HTMLButtonElement>('btn-sandbox').addEventListener('click', () => this.enterSandbox());
     must<HTMLButtonElement>('btn-reset').addEventListener('click', () => this.restart());
     this.btnRetry.addEventListener('click', () => this.retry());
     must<HTMLButtonElement>('btn-restart').addEventListener('click', () => this.restart());
+    must<HTMLButtonElement>('btn-next').addEventListener('click', () => this.newChallenge());
+    must<HTMLButtonElement>('btn-replay').addEventListener('click', () => this.restart());
 
-    this.model = new GameModel(BARS[0], DEFAULT_TRAY);
+    const m = location.hash.match(/^#c=(\d+)\.([a-z]+)$/);
+    if (m && BARS.some((b) => b.id === m[2])) {
+      this.loadChallenge(generateChallenge(Number(m[1]), m[2]));
+    } else {
+      this.newChallenge();
+    }
+  }
+
+  /** Input is frozen while a fail or win overlay is up. */
+  get locked(): boolean {
+    return this.failed || this.won;
+  }
+
+  // ---- modes ----
+
+  newChallenge(seed?: number, barId?: string): void {
+    const s = seed ?? Math.floor(Math.random() * 1_000_000);
+    const b = barId ?? BARS[Math.floor(Math.random() * BARS.length)].id;
+    this.loadChallenge(generateChallenge(s, b));
+  }
+
+  loadChallenge(ch: Challenge): void {
+    this.challenge = ch;
+    const bar = BARS.find((b) => b.id === ch.barId) ?? BARS[0];
+    this.model = new GameModel(bar, ch.tray);
+    this.model.left = ch.left.map((p) => ({ ...p }));
+    this.model.right = ch.right.map((p) => ({ ...p }));
+    this.preMove = null;
+    this.barSelect.value = ch.barId;
+    this.chalLabel.textContent = `#${ch.seed}`;
+    history.replaceState(null, '', `#c=${ch.seed}.${ch.barId}`);
+    this.rebuild();
+  }
+
+  enterSandbox(): void {
+    this.challenge = null;
+    const bar = BARS.find((b) => b.id === this.barSelect.value) ?? BARS[0];
+    this.model = new GameModel(bar, DEFAULT_TRAY);
+    this.preMove = null;
+    this.chalLabel.textContent = 'sandbox';
+    history.replaceState(null, '', location.pathname + location.search);
+    this.rebuild();
+  }
+
+  /** Back to this challenge's starting position (or an empty sandbox bar). */
+  restart(): void {
+    if (this.challenge) {
+      this.loadChallenge(this.challenge);
+    } else {
+      this.model = new GameModel(this.model.bar, DEFAULT_TRAY);
+      this.preMove = null;
+      this.rebuild();
+    }
+  }
+
+  switchBar(id: string): void {
+    if (this.challenge) {
+      this.newChallenge(undefined, id);
+    } else {
+      const bar = BARS.find((b) => b.id === id) ?? BARS[0];
+      this.barSelect.value = bar.id;
+      this.model = new GameModel(bar, DEFAULT_TRAY);
+      this.preMove = null;
+      this.rebuild();
+    }
+  }
+
+  retry(): void {
+    if (this.preMove) this.model.restore(this.preMove);
     this.rebuild();
   }
 
@@ -74,9 +156,12 @@ export class Game implements GameHooks {
     this.currPose = { ...p };
     this.acc = 0;
     this.tiltSteps = 0;
+    this.winSteps = 0;
     this.hand = null;
     this.failed = false;
+    this.won = false;
     this.overlay.classList.add('hidden');
+    this.winOverlay.classList.add('hidden');
   }
 
   start(): void {
@@ -107,6 +192,7 @@ export class Game implements GameHooks {
     this.sim.step();
     this.currPose = this.sim.barPose();
     this.checkFail();
+    this.checkWin();
   }
 
   /** Deterministically advance the sim (debug/testing helper, bypasses rAF). */
@@ -130,6 +216,29 @@ export class Game implements GameHooks {
     this.sim.releasePlates(this.model); // plates unweld and slide as the bar goes
     this.btnRetry.style.display = this.preMove ? '' : 'none';
     this.overlay.classList.remove('hidden');
+  }
+
+  /** Win = goal total on a standing, settled bar with empty hands, held 0.5 s. */
+  private checkWin(): void {
+    if (!this.challenge || this.won || this.failed || this.hand) {
+      this.winSteps = 0;
+      return;
+    }
+    const onGoal =
+      Math.abs(this.model.totalMass() - this.challenge.goal) < 1e-6 &&
+      Math.abs(this.currPose.angle) < 0.02;
+    this.winSteps = onGoal ? this.winSteps + 1 : 0;
+    if (this.winSteps >= 60) this.win();
+  }
+
+  private win(): void {
+    this.won = true;
+    const ch = this.challenge!;
+    const m = this.model.moves;
+    const stars = m <= ch.par ? 3 : m <= ch.par + 2 ? 2 : 1;
+    this.winStars.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    this.winText.textContent = `Solved in ${m} move${m === 1 ? '' : 's'} — par ${ch.par}`;
+    this.winOverlay.classList.remove('hidden');
   }
 
   /** Loose-plate poses during a drop (also used by headless tests). */
@@ -160,7 +269,7 @@ export class Game implements GameHooks {
   }
 
   grabFromTray(kg: number): void {
-    if (this.failed || this.model.trayCount(kg) <= 0) return;
+    if (this.locked || this.model.trayCount(kg) <= 0) return;
     if (!this.fitsHand(kg)) {
       this.flashOverCapacity();
       return;
@@ -171,7 +280,7 @@ export class Game implements GameHooks {
   }
 
   grabFromBar(side: Side): void {
-    if (this.failed) return;
+    if (this.locked) return;
     const peek = this.model.outermost(side);
     if (!peek) return;
     if (!this.fitsHand(peek.kg)) {
@@ -188,7 +297,7 @@ export class Game implements GameHooks {
   /** Slide the whole hand stack onto `side`, packed flush from `offset` outward. */
   placeHand(side: Side, offset: number): void {
     const hand = this.hand;
-    if (!hand || hand.plates.length === 0 || this.failed) return;
+    if (!hand || hand.plates.length === 0 || this.locked) return;
     const order = [...hand.plates].reverse(); // first grabbed lands outermost
     const total = order.reduce((a, p) => a + plateSpec(p.kg).width, 0);
     const range = this.model.validRange(side, total);
@@ -204,14 +313,14 @@ export class Game implements GameHooks {
 
   dropHandToTray(): void {
     const hand = this.hand;
-    if (!hand || this.failed) return;
+    if (!hand || this.locked) return;
     for (const p of hand.plates) this.model.trayPut(p.kg);
     this.finishHand();
   }
 
   cancelHand(): void {
     const hand = this.hand;
-    if (!hand || this.failed) return;
+    if (!hand || this.locked) return;
     for (const p of [...hand.plates].reverse()) {
       if (p.from.type === 'tray') {
         this.model.trayPut(p.kg);
@@ -231,26 +340,6 @@ export class Game implements GameHooks {
 
   flashOverCapacity(): void {
     this.overCapUntil = performance.now() + 500;
-  }
-
-  // ---- buttons ----
-
-  retry(): void {
-    if (this.preMove) this.model.restore(this.preMove);
-    this.rebuild();
-  }
-
-  restart(): void {
-    this.model = new GameModel(this.model.bar, DEFAULT_TRAY);
-    this.preMove = null;
-    this.rebuild();
-  }
-
-  switchBar(id: string): void {
-    const bar = BARS.find((b) => b.id === id) ?? BARS[0];
-    this.model = new GameModel(bar, DEFAULT_TRAY);
-    this.preMove = null;
-    this.rebuild();
   }
 
   // ---- presentation ----
@@ -288,10 +377,20 @@ export class Game implements GameHooks {
     this.stRight.textContent = `${fmtKg(this.model.sideMass('R'))} kg`;
     this.stMoves.textContent = String(this.model.moves);
 
+    if (this.challenge) {
+      const onGoal = Math.abs(this.model.totalMass() - this.challenge.goal) < 1e-6;
+      this.stGoal.textContent = `${fmtKg(this.challenge.goal)} kg`;
+      this.stGoal.className = 'value' + (onGoal ? ' ok' : '');
+      this.stPar.textContent = String(this.challenge.par);
+    } else {
+      this.stGoal.textContent = '—';
+      this.stGoal.className = 'value';
+      this.stPar.textContent = '—';
+    }
+
     const f = this.model.tipFraction();
     const pct = Math.round(Math.abs(f) * 100);
-    this.stBalance.textContent =
-      pct === 0 ? 'even' : `${f < 0 ? '◀' : '▶'} ${pct}%`;
+    this.stBalance.textContent = pct === 0 ? 'even' : `${f < 0 ? '◀' : '▶'} ${pct}%`;
     this.stBalance.className =
       'value ' + (this.failed || pct >= 100 ? 'danger' : pct >= 60 ? 'warn' : 'ok');
 

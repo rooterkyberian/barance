@@ -102,7 +102,7 @@
         height: auto;
         border-radius: 8px;
       }
-      #overlay {
+      .overlay {
         position: absolute;
         top: 16%;
         left: 50%;
@@ -113,22 +113,39 @@
         padding: 20px 28px;
         text-align: center;
         backdrop-filter: blur(4px);
+        min-width: 300px;
       }
-      #overlay.hidden {
+      .overlay.hidden {
         display: none;
       }
-      #overlay h2 {
+      .overlay h2 {
         color: #ff6b6b;
         font-size: 20px;
         margin-bottom: 6px;
       }
-      #overlay p {
+      .overlay p {
         font-size: 13px;
         color: #9aa2ae;
         margin-bottom: 14px;
       }
-      #overlay button {
+      .overlay button {
         margin: 0 5px;
+      }
+      #win-overlay {
+        border-color: #2f5b35;
+      }
+      #win-overlay h2 {
+        color: #6bd07b;
+      }
+      #win-stars {
+        color: #e6b83c;
+        font-size: 26px;
+        letter-spacing: 8px;
+        margin-bottom: 6px;
+      }
+      .chal {
+        font-size: 12px;
+        color: #6d7683;
       }
       footer {
         padding: 10px 16px 18px;
@@ -142,28 +159,41 @@
   </head>
   <body>
     <header>
-      <h1>Barance<span class="tag">physics sandbox</span></h1>
+      <h1>Barance<span class="tag">physics puzzle</span></h1>
       <select id="bar-select" title="Bar type"></select>
-      <button id="btn-reset" title="Empty the bar, refill the tray">Reset</button>
+      <button id="btn-new">New challenge</button>
+      <button id="btn-sandbox" title="Free play — no goal">Sandbox</button>
+      <button id="btn-reset" title="Back to the starting position">Reset</button>
+      <span id="chal-label" class="chal"></span>
       <div class="stats">
         <div class="stat"><span class="label">Total</span><span class="value" id="stat-total">–</span></div>
+        <div class="stat"><span class="label">Goal</span><span class="value" id="stat-goal">–</span></div>
         <div class="stat"><span class="label">Left</span><span class="value" id="stat-left">–</span></div>
         <div class="stat"><span class="label">Right</span><span class="value" id="stat-right">–</span></div>
         <div class="stat"><span class="label">Balance</span><span class="value" id="stat-balance">–</span></div>
         <div class="stat"><span class="label">Carrying</span><span class="value" id="stat-carry">–</span></div>
         <div class="stat"><span class="label">Moves</span><span class="value" id="stat-moves">0</span></div>
+        <div class="stat"><span class="label">Par</span><span class="value" id="stat-par">–</span></div>
       </div>
     </header>
     <div id="stage">
       <canvas id="game" width="1280" height="720"></canvas>
-      <div id="overlay" class="hidden">
+      <div id="overlay" class="overlay hidden">
         <h2>Bar dropped!</h2>
         <p>The load tipped the bar off the J-hooks.</p>
         <button id="btn-retry">Undo last move &amp; retry</button>
         <button id="btn-restart">Start over</button>
       </div>
+      <div id="win-overlay" class="overlay hidden">
+        <h2>Challenge complete!</h2>
+        <div id="win-stars">★★★</div>
+        <p id="win-text"></p>
+        <button id="btn-next">Next challenge</button>
+        <button id="btn-replay">Replay</button>
+      </div>
     </div>
     <footer>
+      Load the bar to hit the goal weight — the total is what counts, and the bar has to stay up.
       Click plates to pick them up — keep clicking to stack more in hand (up to 20&nbsp;kg; a lone
       25 always fits). Click a sleeve to slide the stack on, click the floor to set it down,
       right-click or Esc to put everything back. Only the outermost plate comes off. Plates in
