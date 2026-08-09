@@ -55,7 +55,11 @@ interface Drag extends SlideTarget {
   pointerId: number;
   grabU: number; // |bar-local x| where the drag started
   startOffset: number;
+  live: boolean; // false until the pointer travels far enough to mean a shove
 }
+
+/** Sleeve travel, in metres, that separates a click from a drag. */
+const DRAG_SLOP = 0.018;
 
 const NO_HOVER: HoverState = { trayKg: null, barSide: null, canGrab: false, slide: null };
 
@@ -155,9 +159,13 @@ export class Input {
   private slidableAt(w: { x: number; y: number }): SlideTarget | null {
     if (this.game.hand) return null;
     const hit = this.hitBarPlate(w);
-    if (!hit || this.isOutermost(hit)) return null;
+    if (!hit) return null;
+    return this.hasRoom(hit) ? hit : null;
+  }
+
+  private hasRoom(hit: SlideTarget): boolean {
     const b = this.game.model.slideBounds(hit.side, hit.index);
-    return b.max - b.min > 1e-9 ? hit : null;
+    return b.max - b.min > 1e-9;
   }
 
   private computeGhost(w: { x: number; y: number }): Ghost | null {
@@ -230,23 +238,32 @@ export class Input {
       this.endDrag(e);
       return;
     }
-    const steps = Math.round((this.sleeveU(w) - d.grabU) / PHYS.snapGrid);
+    const du = this.sleeveU(w) - d.grabU;
+    if (!d.live) {
+      if (Math.abs(du) < DRAG_SLOP || !this.hasRoom(d)) return;
+      d.live = true;
+      this.game.beginSlide();
+    }
+    const steps = Math.round(du / PHYS.snapGrid);
     this.game.slideTo(d.side, d.index, d.startOffset + steps * PHYS.snapGrid);
     this.hover = { ...NO_HOVER, slide: { side: d.side, index: d.index } };
     this.canvas.style.cursor = 'grabbing';
   }
 
-  private beginDrag(e: PointerEvent, w: { x: number; y: number }, hit: SlideTarget): void {
+  /**
+   * Arm a drag without committing to one. The outermost plate answers to both a
+   * click (lift it off) and a drag (shove it along), so which it was is only
+   * known once the pointer has either travelled or come back up.
+   */
+  private armDrag(e: PointerEvent, w: { x: number; y: number }, hit: SlideTarget): void {
     this.drag = {
       ...hit,
       pointerId: e.pointerId,
       grabU: this.sleeveU(w),
       startOffset: this.game.model.sleeve(hit.side)[hit.index].offset,
+      live: false,
     };
     this.canvas.setPointerCapture(e.pointerId);
-    this.game.beginSlide();
-    this.hover = { ...NO_HOVER, slide: hit };
-    this.canvas.style.cursor = 'grabbing';
   }
 
   private endDrag(e: PointerEvent): void {
@@ -254,7 +271,8 @@ export class Input {
     if (!d) return;
     this.drag = null;
     if (this.canvas.hasPointerCapture(d.pointerId)) this.canvas.releasePointerCapture(d.pointerId);
-    this.game.endSlide();
+    if (d.live) this.game.endSlide();
+    else if (this.isOutermost(d) && !this.game.locked) this.grabOutermost(d.side);
     this.updateAtPoint(this.view.eventToWorld(e));
   }
 
@@ -264,8 +282,14 @@ export class Input {
     if (!d) return;
     this.drag = null;
     if (this.canvas.hasPointerCapture(d.pointerId)) this.canvas.releasePointerCapture(d.pointerId);
-    this.game.cancelSlide();
+    if (d.live) this.game.cancelSlide();
     this.canvas.style.cursor = 'default';
+  }
+
+  private grabOutermost(side: Side): void {
+    const p = this.game.model.outermost(side);
+    if (p && this.fitsHand(p.kg)) this.game.grabFromBar(side);
+    else this.game.flashOverCapacity();
   }
 
   private onDown(e: PointerEvent): void {
@@ -274,18 +298,16 @@ export class Input {
     this.updateAtPoint(w);
 
     const hit = this.hitBarPlate(w);
-    if (hit && this.isOutermost(hit)) {
-      const p = this.game.model.outermost(hit.side);
-      if (p && this.fitsHand(p.kg)) this.game.grabFromBar(hit.side);
-      else this.game.flashOverCapacity();
-      this.updateAtPoint(w);
-      return;
-    }
-
-    const slide = this.slidableAt(w);
-    if (slide) {
-      this.beginDrag(e, w, slide);
-      return;
+    if (hit) {
+      if (!this.game.hand) {
+        this.armDrag(e, w, hit);
+        return;
+      }
+      if (this.isOutermost(hit)) {
+        this.grabOutermost(hit.side);
+        this.updateAtPoint(w);
+        return;
+      }
     }
 
     const trayKg = this.hitTraySlot(w);

@@ -35,9 +35,11 @@ Live build: <https://rooterkyberian.github.io/barance/>
   always fits, so a lone 25 is carryable). One carry = **1 move**, however many plates it holds.
 - **Click a sleeve** to slide the whole stack on (ghost preview shows where it lands; plates load
   from the tip, so new plates go outboard of existing ones).
-- **Drag a plate that isn't outermost** to shove it along the sleeve. It can't come off past its
-  neighbours, but it can slide — and it pushes whatever it runs into ahead of it, out to the sleeve
-  tip or back against the shoulder. Plates it never reaches keep their gaps. One shove = **1 move**.
+- **Drag any plate** to shove it along the sleeve. It pushes whatever it runs into ahead of it, out
+  to the sleeve tip or back against the shoulder; plates it never reaches keep their gaps. On the
+  outermost plate a click lifts it off and a drag shoves it, so you can push a whole stack back in
+  from the outside. Plates further in can't come off past their neighbours, only slide. One
+  shove = **1 move**.
 - **Click the floor** to set the stack down; **right-click / Esc** puts everything back (free).
   Mid-drag, the same puts the whole sleeve back where it was, also free.
 - Picking the outermost plate off and putting it back where it was counts 0 moves. So does sliding a

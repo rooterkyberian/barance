@@ -247,7 +247,7 @@ export class Renderer {
         if (isHoverGrab || isHoverSlide) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.5 / S;
-          if (isHoverSlide) ctx.setLineDash([0.022, 0.015]);
+          if (isHoverSlide && !isHoverGrab) ctx.setLineDash([0.022, 0.015]);
           ctx.strokeRect(cx - spec.width / 2, -spec.diameter / 2, spec.width, spec.diameter);
           ctx.setLineDash([]);
         }
