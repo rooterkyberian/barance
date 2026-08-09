@@ -137,10 +137,15 @@ export class Sim {
    */
   releasePlates(model: GameModel): void {
     if (!this.world || this.loose.length > 0) return;
-    const bp = this.barBody.translation();
+    const bp = { ...this.barBody.translation() };
     const ang = this.barBody.rotation();
-    const lv = this.barBody.linvel();
+    const lv = { ...this.barBody.linvel() };
     const av = this.barBody.angvel();
+    // linvel is the velocity of the CENTRE OF MASS, so that is the reference
+    // point for v = v_com + w x r. A loaded bar's CoM sits out under the plates,
+    // far from the body origin; using the origin here hands every plate a
+    // spurious w x (com - origin), and the reaction launches the bar.
+    const com = { ...this.barBody.worldCom() };
     const c = Math.cos(ang);
     const s = Math.sin(ang);
     for (const side of ['L', 'R'] as Side[]) {
@@ -157,7 +162,7 @@ export class Sim {
           RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(wx, wy)
             .setRotation(ang)
-            .setLinvel(lv.x - av * (wy - bp.y), lv.y + av * (wx - bp.x))
+            .setLinvel(lv.x - av * (wy - com.y), lv.y + av * (wx - com.x))
             .setAngvel(av)
             .setCcdEnabled(true),
         );
