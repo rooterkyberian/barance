@@ -21,10 +21,17 @@ export interface Hand {
   ghost: Ghost | null;
 }
 
+/** A plate on the bar that the pointer can shove along its sleeve. */
+export interface SlideTarget {
+  side: Side;
+  index: number;
+}
+
 export interface HoverState {
   trayKg: number | null;
   barSide: Side | null;
   canGrab: boolean;
+  slide: SlideTarget | null;
 }
 
 export interface GameHooks {
@@ -38,15 +45,30 @@ export interface GameHooks {
   dropHandToTray(): void;
   cancelHand(): void;
   flashOverCapacity(): void;
+  beginSlide(): void;
+  slideTo(side: Side, index: number, offset: number): void;
+  endSlide(): void;
+  cancelSlide(): void;
 }
+
+interface Drag extends SlideTarget {
+  pointerId: number;
+  grabU: number; // |bar-local x| where the drag started
+  startOffset: number;
+}
+
+const NO_HOVER: HoverState = { trayKg: null, barSide: null, canGrab: false, slide: null };
 
 /**
  * Click-based interaction: click plates to stack them in hand (weightless),
  * click a sleeve to slide the whole stack on, click open floor to set it down,
- * right-click / Esc to put everything back where it came from.
+ * right-click / Esc to put everything back where it came from. A plate that is
+ * not outermost cannot be lifted past its neighbours, so it is dragged along the
+ * sleeve instead, shoving whatever it runs into.
  */
 export class Input {
-  hover: HoverState = { trayKg: null, barSide: null, canGrab: false };
+  hover: HoverState = { ...NO_HOVER };
+  private drag: Drag | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -57,16 +79,22 @@ export class Input {
       if (e.button === 0) this.onDown(e);
     });
     canvas.addEventListener('pointermove', (e) => this.onMove(e));
+    canvas.addEventListener('pointerup', (e) => this.endDrag(e));
+    canvas.addEventListener('pointercancel', (e) => this.endDrag(e));
     canvas.addEventListener('pointerleave', () => {
-      this.hover = { trayKg: null, barSide: null, canGrab: false };
+      if (this.drag) return;
+      this.hover = { ...NO_HOVER };
       if (this.game.hand) this.game.hand.ghost = null;
     });
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this.game.cancelHand();
+      if (this.drag) this.abortDrag();
+      else this.game.cancelHand();
     });
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.game.cancelHand();
+      if (e.key !== 'Escape') return;
+      if (this.drag) this.abortDrag();
+      else this.game.cancelHand();
     });
   }
 
@@ -103,17 +131,33 @@ export class Input {
     return w.y < 0.55;
   }
 
-  private hitBarOutermost(w: { x: number; y: number }): Side | null {
+  /** Topmost plate under the pointer, searched tip-inward so the outer one wins. */
+  private hitBarPlate(w: { x: number; y: number }): SlideTarget | null {
     const { lx, ly } = this.toBarLocal(w);
     const side: Side = lx < 0 ? 'L' : 'R';
-    const p = this.game.model.outermost(side);
-    if (!p) return null;
-    const spec = plateSpec(p.kg);
-    const cx = this.game.model.localX(side, p.kg, p.offset);
-    if (Math.abs(lx - cx) <= spec.width / 2 + 0.015 && Math.abs(ly) <= spec.diameter / 2 + 0.015) {
-      return side;
+    const model = this.game.model;
+    const plates = model.sleeve(side);
+    for (let i = plates.length - 1; i >= 0; i--) {
+      const spec = plateSpec(plates[i].kg);
+      const cx = model.localX(side, plates[i].kg, plates[i].offset);
+      if (Math.abs(lx - cx) <= spec.width / 2 + 0.015 && Math.abs(ly) <= spec.diameter / 2 + 0.015) {
+        return { side, index: i };
+      }
     }
     return null;
+  }
+
+  private isOutermost(hit: SlideTarget): boolean {
+    return hit.index === this.game.model.sleeve(hit.side).length - 1;
+  }
+
+  /** A plate is draggable when it has room to travel and the hand is free. */
+  private slidableAt(w: { x: number; y: number }): SlideTarget | null {
+    if (this.game.hand) return null;
+    const hit = this.hitBarPlate(w);
+    if (!hit || this.isOutermost(hit)) return null;
+    const b = this.game.model.slideBounds(hit.side, hit.index);
+    return b.max - b.min > 1e-9 ? hit : null;
   }
 
   private computeGhost(w: { x: number; y: number }): Ghost | null {
@@ -141,7 +185,7 @@ export class Input {
 
   private updateAtPoint(w: { x: number; y: number }): void {
     if (this.game.locked) {
-      this.hover = { trayKg: null, barSide: null, canGrab: false };
+      this.hover = { ...NO_HOVER };
       this.canvas.style.cursor = 'default';
       return;
     }
@@ -150,8 +194,10 @@ export class Input {
       hand.world = w;
       hand.ghost = this.computeGhost(w);
     }
-    const barSide = this.hitBarOutermost(w);
-    const trayKg = barSide === null ? this.hitTraySlot(w) : null;
+    const hit = this.hitBarPlate(w);
+    const barSide = hit && this.isOutermost(hit) ? hit.side : null;
+    const slide = this.slidableAt(w);
+    const trayKg = hit === null ? this.hitTraySlot(w) : null;
     let canGrab = false;
     if (barSide) {
       const p = this.game.model.outermost(barSide);
@@ -159,16 +205,67 @@ export class Input {
     } else if (trayKg != null) {
       canGrab = this.game.model.trayCount(trayKg) > 0 && this.fitsHand(trayKg);
     }
-    this.hover = { trayKg, barSide, canGrab };
+    this.hover = { trayKg, barSide, canGrab, slide };
 
     let cursor = 'default';
     if (canGrab) cursor = hand ? 'copy' : 'grab';
+    else if (slide) cursor = 'ew-resize';
     else if (hand?.ghost?.valid) cursor = 'pointer';
     this.canvas.style.cursor = cursor;
   }
 
+  /** Bar-local distance from the bar centre, the axis plates travel along. */
+  private sleeveU(w: { x: number; y: number }): number {
+    return Math.abs(this.toBarLocal(w).lx);
+  }
+
   private onMove(e: PointerEvent): void {
+    const w = this.view.eventToWorld(e);
+    const d = this.drag;
+    if (!d) {
+      this.updateAtPoint(w);
+      return;
+    }
+    if (this.game.locked) {
+      this.endDrag(e);
+      return;
+    }
+    const steps = Math.round((this.sleeveU(w) - d.grabU) / PHYS.snapGrid);
+    this.game.slideTo(d.side, d.index, d.startOffset + steps * PHYS.snapGrid);
+    this.hover = { ...NO_HOVER, slide: { side: d.side, index: d.index } };
+    this.canvas.style.cursor = 'grabbing';
+  }
+
+  private beginDrag(e: PointerEvent, w: { x: number; y: number }, hit: SlideTarget): void {
+    this.drag = {
+      ...hit,
+      pointerId: e.pointerId,
+      grabU: this.sleeveU(w),
+      startOffset: this.game.model.sleeve(hit.side)[hit.index].offset,
+    };
+    this.canvas.setPointerCapture(e.pointerId);
+    this.game.beginSlide();
+    this.hover = { ...NO_HOVER, slide: hit };
+    this.canvas.style.cursor = 'grabbing';
+  }
+
+  private endDrag(e: PointerEvent): void {
+    const d = this.drag;
+    if (!d) return;
+    this.drag = null;
+    if (this.canvas.hasPointerCapture(d.pointerId)) this.canvas.releasePointerCapture(d.pointerId);
+    this.game.endSlide();
     this.updateAtPoint(this.view.eventToWorld(e));
+  }
+
+  /** Esc / right-click mid-drag: put the whole sleeve back, free of charge. */
+  private abortDrag(): void {
+    const d = this.drag;
+    if (!d) return;
+    this.drag = null;
+    if (this.canvas.hasPointerCapture(d.pointerId)) this.canvas.releasePointerCapture(d.pointerId);
+    this.game.cancelSlide();
+    this.canvas.style.cursor = 'default';
   }
 
   private onDown(e: PointerEvent): void {
@@ -176,12 +273,18 @@ export class Input {
     const w = this.view.eventToWorld(e);
     this.updateAtPoint(w);
 
-    const barSide = this.hitBarOutermost(w);
-    if (barSide) {
-      const p = this.game.model.outermost(barSide);
-      if (p && this.fitsHand(p.kg)) this.game.grabFromBar(barSide);
+    const hit = this.hitBarPlate(w);
+    if (hit && this.isOutermost(hit)) {
+      const p = this.game.model.outermost(hit.side);
+      if (p && this.fitsHand(p.kg)) this.game.grabFromBar(hit.side);
       else this.game.flashOverCapacity();
       this.updateAtPoint(w);
+      return;
+    }
+
+    const slide = this.slidableAt(w);
+    if (slide) {
+      this.beginDrag(e, w, slide);
       return;
     }
 

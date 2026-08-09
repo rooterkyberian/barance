@@ -5,10 +5,21 @@ export interface BarSpec {
   name: string;
   mass: number; // kg
   length: number; // m, end to end
+  shaftSpan: number; // m, between the inside of the collars (IWF fixes this at 1.31)
   sleeveLength: number; // m, loadable length per side
   shaftRadius: number; // m
   sleeveRadius: number; // m, visual
   hookHalfSpan: number; // m, J-hooks sit at ±hookHalfSpan
+}
+
+/**
+ * Distance from bar centre to the sleeve shoulder. Half the shaft, NOT
+ * `length/2 - sleeveLength`: a real bar carries ~30 mm of end cap outboard of
+ * the loadable sleeve, so deriving it from the overall length hands every plate
+ * a lever arm it does not have.
+ */
+export function sleeveStart(bar: BarSpec): number {
+  return bar.shaftSpan / 2;
 }
 
 export const BARS: BarSpec[] = [
@@ -17,6 +28,7 @@ export const BARS: BarSpec[] = [
     name: "Olympic men's — 20 kg",
     mass: 20,
     length: 2.2,
+    shaftSpan: 1.31,
     sleeveLength: 0.415,
     shaftRadius: 0.014,
     sleeveRadius: 0.025,
@@ -27,6 +39,7 @@ export const BARS: BarSpec[] = [
     name: "Olympic women's — 15 kg",
     mass: 15,
     length: 2.01,
+    shaftSpan: 1.31,
     sleeveLength: 0.32,
     shaftRadius: 0.0125,
     sleeveRadius: 0.025,
@@ -37,6 +50,7 @@ export const BARS: BarSpec[] = [
     name: 'Technique bar — 7 kg',
     mass: 7,
     length: 1.7,
+    shaftSpan: 1.14,
     sleeveLength: 0.25,
     shaftRadius: 0.0125,
     sleeveRadius: 0.024,

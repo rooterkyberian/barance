@@ -1,4 +1,4 @@
-import { BARS, BarSpec, CARRY_CAPACITY_KG, PLATE_LIST, RACK, plateSpec } from './config';
+import { BARS, BarSpec, CARRY_CAPACITY_KG, PLATE_LIST, RACK, plateSpec, sleeveStart } from './config';
 import type { PlacedPlate } from './model';
 
 /**
@@ -42,7 +42,7 @@ function pack(kgs: number[]): PlacedPlate[] {
 
 /** Tip fraction for plates packed flush from each shoulder (mirrors GameModel.tipFraction). */
 function packedTip(bar: BarSpec, L: number[], R: number[]): number {
-  const s0 = bar.length / 2 - bar.sleeveLength;
+  const s0 = sleeveStart(bar);
   let m = bar.mass;
   let mx = 0;
   const acc = (arr: number[], sgn: number) => {

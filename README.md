@@ -1,5 +1,7 @@
 # Barance
 
+**▶ [Play it here](https://rooterkyberian.github.io/barance/)** — runs in the browser, no install.
+
 A 2D physics puzzle: load and unload a barbell resting on squat-rack J-hooks to match target
 configurations in the fewest moves. The bar is a real rigid body — load it asymmetrically and it
 tips off the hooks. Tipping is emergent (torque about the hook-seat edge), never scripted.
@@ -25,14 +27,7 @@ win. Stars: ≤ par = ★★★, ≤ par + 2 = ★★, otherwise ★.
 
 ## Play
 
-- **Click a plate** (tray or the outermost plate on a sleeve) to pick it up. Plates in hand are
-  weightless — the bar rebalances the moment you lift one.
-- **Keep clicking** to stack more plates in hand, up to the carry capacity (20 kg; a single plate
-  always fits, so a lone 25 is carryable). One carry = **1 move**, however many plates it holds.
-- **Click a sleeve** to slide the whole stack on (ghost preview shows where it lands; plates load
-  from the tip, so new plates go outboard of existing ones).
-- **Click the floor** to set the stack down; **right-click / Esc** puts everything back (free).
-- Picking the outermost plate off and putting it back where it was counts 0 moves.
+Live build: <https://rooterkyberian.github.io/barance/>
 
 - **Click a plate** (tray or the outermost plate on a sleeve) to pick it up. Plates in hand are
   weightless — the bar rebalances the moment you lift one.
@@ -40,8 +35,13 @@ win. Stars: ≤ par = ★★★, ≤ par + 2 = ★★, otherwise ★.
   always fits, so a lone 25 is carryable). One carry = **1 move**, however many plates it holds.
 - **Click a sleeve** to slide the whole stack on (ghost preview shows where it lands; plates load
   from the tip, so new plates go outboard of existing ones).
+- **Drag a plate that isn't outermost** to shove it along the sleeve. It can't come off past its
+  neighbours, but it can slide — and it pushes whatever it runs into ahead of it, out to the sleeve
+  tip or back against the shoulder. Plates it never reaches keep their gaps. One shove = **1 move**.
 - **Click the floor** to set the stack down; **right-click / Esc** puts everything back (free).
-- Picking the outermost plate off and putting it back where it was counts 0 moves.
+  Mid-drag, the same puts the whole sleeve back where it was, also free.
+- Picking the outermost plate off and putting it back where it was counts 0 moves. So does sliding a
+  plate back to where it started — but only if it didn't shove anything on the way out.
 - If the bar tilts past **15°**, the level is failed — the fall still plays out in physics, and
   the plates unweld and slide along the sleeve (off the open end, if the tilt carries them there).
   *Undo last move & retry* restores the state before the fatal move.
@@ -54,7 +54,10 @@ win. Stars: ≤ par = ★★★, ≤ par + 2 = ★★, otherwise ★.
   extra colliders on that body, so mass, CoM and inertia update exactly with every placement.
 - The bar pivots about the **outer edge** of a hook seat (seats are 9 cm wide, like real
   J-hooks) — the balance meter's 100% is that edge, verified against the sim.
-- During stable play plates are welded to the bar (deterministic resting contacts). When a drop
+- During stable play plates are welded to the bar (deterministic resting contacts). Shoving a plate
+  re-seats its collider on the bar body, so mass, CoM and inertia follow the slide — dragging a
+  loaded stack out toward the tip really can put the bar over the edge, and the threshold is the
+  same one the balance meter shows, independent of how fast you drag. When a drop
   starts (>15° tilt, roughly where steel-on-steel plates really slip), each plate becomes its own
   body on a prismatic joint along the bar axis — sleeve shoulder as the inner stop, and a plate
   sliding past the bar end comes free entirely.
@@ -75,9 +78,9 @@ npm run preview  # serve the build
 
 ## Deploy
 
-Pushing to `main` builds and deploys to GitHub Pages via `.github/workflows/deploy.yml`
-(repo Settings → Pages → Source: **GitHub Actions**). `vite.config.ts` uses `base: './'`, so it
-works under the project-page subpath.
+Pushing to `main` builds and deploys to <https://rooterkyberian.github.io/barance/> via
+`.github/workflows/deploy.yml` (repo Settings → Pages → Source: **GitHub Actions**).
+`vite.config.ts` uses `base: './'`, so it works under the project-page subpath.
 
 ## Code map
 

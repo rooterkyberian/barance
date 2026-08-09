@@ -1,4 +1,4 @@
-import { BarSpec, RACK, plateSpec, Side } from './config';
+import { BarSpec, RACK, plateSpec, sleeveStart, Side } from './config';
 
 /** A plate on a sleeve. `offset` = inner-edge distance from the sleeve shoulder, m. */
 export interface PlacedPlate {
@@ -36,7 +36,7 @@ export class GameModel {
 
   /** Distance from bar centre to the sleeve shoulder. */
   sleeveStart(): number {
-    return this.bar.length / 2 - this.bar.sleeveLength;
+    return sleeveStart(this.bar);
   }
 
   /** Bar-local x of the centre of a plate of `kg` at `offset` on `side`. */
@@ -60,6 +60,39 @@ export class GameModel {
     const min = out ? out.offset + plateSpec(out.kg).width : 0;
     const max = this.bar.sleeveLength - width;
     return max >= min - 1e-9 ? { min, max: Math.max(min, max) } : null;
+  }
+
+  /**
+   * How far the plate at `index` can travel along its sleeve. Whatever it runs
+   * into travels with it, so the limits are the flush-packed extremes: inboard,
+   * every plate below it stacked against the shoulder; outboard, every plate
+   * from it up stacked against the tip.
+   */
+  slideBounds(side: Side, index: number): { min: number; max: number } {
+    const s = this.sleeve(side);
+    let below = 0;
+    for (let i = 0; i < index; i++) below += plateSpec(s[i].kg).width;
+    let fromHere = 0;
+    for (let i = index; i < s.length; i++) fromHere += plateSpec(s[i].kg).width;
+    return { min: below, max: this.bar.sleeveLength - fromHere };
+  }
+
+  /**
+   * Slide the plate at `index` to `offset`, shoving the plates it meets ahead of
+   * it. Plates it never reaches keep whatever gap they had.
+   */
+  slidePlate(side: Side, index: number, offset: number): void {
+    const s = this.sleeve(side);
+    const b = this.slideBounds(side, index);
+    s[index].offset = Math.min(Math.max(offset, b.min), b.max);
+    for (let i = index + 1; i < s.length; i++) {
+      const flush = s[i - 1].offset + plateSpec(s[i - 1].kg).width;
+      if (s[i].offset < flush) s[i].offset = flush;
+    }
+    for (let i = index - 1; i >= 0; i--) {
+      const flush = s[i + 1].offset - plateSpec(s[i].kg).width;
+      if (s[i].offset > flush) s[i].offset = flush;
+    }
   }
 
   attach(side: Side, kg: number, offset: number): void {

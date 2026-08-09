@@ -311,6 +311,32 @@ export class Game implements GameHooks {
     this.finishHand();
   }
 
+  /**
+   * A shove is one move, on the same terms as a carry: the state before the
+   * drag becomes the retry point, and ending where you started costs nothing.
+   */
+  beginSlide(): void {
+    if (this.locked || this.hand) return;
+    this.preMove = this.model.snapshot();
+  }
+
+  slideTo(side: Side, index: number, offset: number): void {
+    if (this.locked) return;
+    this.model.slidePlate(side, index, offset);
+    this.sim.syncPlates(this.model, side);
+  }
+
+  endSlide(): void {
+    if (this.locked) return;
+    if (this.preMove && !this.model.equalsState(this.preMove)) this.model.moves++;
+  }
+
+  cancelSlide(): void {
+    if (this.locked || !this.preMove) return;
+    this.model.restore(this.preMove);
+    for (const side of ['L', 'R'] as Side[]) this.sim.syncPlates(this.model, side);
+  }
+
   dropHandToTray(): void {
     const hand = this.hand;
     if (!hand || this.locked) return;

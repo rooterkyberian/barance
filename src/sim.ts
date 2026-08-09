@@ -105,6 +105,22 @@ export class Sim {
     this.barBody.wakeUp();
   }
 
+  /**
+   * Re-seat a sleeve's colliders after a slide. Moving a collider on the bar
+   * body shifts the body's CoM and inertia with it, so a shove retips the bar.
+   */
+  syncPlates(model: GameModel, side: Side): void {
+    const plates = model.sleeve(side);
+    const cols = this.plateCols[side];
+    for (let i = 0; i < plates.length && i < cols.length; i++) {
+      cols[i].setTranslationWrtParent({
+        x: model.localX(side, plates[i].kg, plates[i].offset),
+        y: 0,
+      });
+    }
+    this.barBody.wakeUp();
+  }
+
   /** Remove the outermost plate collider on `side` (mirrors GameModel pops). */
   detachPlate(side: Side): void {
     if (!this.world) return;

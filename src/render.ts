@@ -1,6 +1,7 @@
 import {
   CARRY_CAPACITY_KG,
   PLATE_LIST,
+  PlateSpec,
   RACK,
   Side,
   TRAY_SLOT_X,
@@ -218,7 +219,7 @@ export class Renderer {
     ctx.fillRect(-bar.length / 2, -bar.shaftRadius, bar.length, bar.shaftRadius * 2);
     ctx.fillStyle = '#c9cfd8';
     for (const s of [-1, 1]) {
-      const x = s === 1 ? s0 : -bar.length / 2;
+      const x = s === 1 ? s0 : -s0 - bar.sleeveLength;
       ctx.fillRect(x, -bar.sleeveRadius, bar.sleeveLength, bar.sleeveRadius * 2);
     }
     ctx.fillStyle = '#d7dce3';
@@ -228,6 +229,7 @@ export class Renderer {
       ctx.fillRect(x, -0.058, w, 0.116);
     }
 
+    let slideTrack: { side: Side; index: number; spec: PlateSpec } | null = null;
     for (const side of f.loosePlates ? [] : (['L', 'R'] as Side[])) {
       const plates = model.sleeve(side);
       for (let i = 0; i < plates.length; i++) {
@@ -241,12 +243,35 @@ export class Renderer {
         ctx.strokeRect(cx - spec.width / 2, -spec.diameter / 2, spec.width, spec.diameter);
         const isHoverGrab =
           hover.barSide === side && i === plates.length - 1 && hover.canGrab && !f.failed;
-        if (isHoverGrab) {
+        const isHoverSlide = hover.slide?.side === side && hover.slide.index === i && !f.failed;
+        if (isHoverGrab || isHoverSlide) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.5 / S;
+          if (isHoverSlide) ctx.setLineDash([0.022, 0.015]);
           ctx.strokeRect(cx - spec.width / 2, -spec.diameter / 2, spec.width, spec.diameter);
+          ctx.setLineDash([]);
         }
+        if (isHoverSlide) slideTrack = { side, index: i, spec };
       }
+    }
+
+    if (slideTrack) {
+      const { side, index, spec } = slideTrack;
+      const b = model.slideBounds(side, index);
+      const sgn = side === 'L' ? -1 : 1;
+      const y = -(spec.diameter / 2 + 0.04);
+      const from = sgn * (s0 + b.min);
+      const to = sgn * (s0 + b.max + spec.width);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1.5 / S;
+      ctx.beginPath();
+      ctx.moveTo(from, y);
+      ctx.lineTo(to, y);
+      for (const x of [from, to]) {
+        ctx.moveTo(x, y - 0.02);
+        ctx.lineTo(x, y + 0.02);
+      }
+      ctx.stroke();
     }
 
     if (hand?.ghost) {
@@ -298,7 +323,7 @@ export class Renderer {
 
   private drawSideLoads(model: GameModel): void {
     const bar = model.bar;
-    const x = bar.length / 2 - bar.sleeveLength / 2;
+    const x = model.sleeveStart() + bar.sleeveLength / 2;
     this.text(`${fmtKg(model.sideMass('L'))} kg`, -x, 1.3, `600 15px ${FONT}`, '#8b93a0');
     this.text(`${fmtKg(model.sideMass('R'))} kg`, x, 1.3, `600 15px ${FONT}`, '#8b93a0');
   }
